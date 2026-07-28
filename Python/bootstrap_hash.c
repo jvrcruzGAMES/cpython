@@ -495,6 +495,12 @@ pyurandom(void *buffer, Py_ssize_t size, int blocking, int raise)
 
 #ifdef MS_WINDOWS
     return win32_urandom((unsigned char *)buffer, size, raise);
+#elif defined(__SWITCH__)
+    if (raise) {
+        PyErr_SetString(PyExc_NotImplementedError,
+                        "os.urandom is not implemented on Switch yet");
+    }
+    return -1;
 #else
 
 #if defined(PY_GETRANDOM) || defined(PY_GETENTROPY)

@@ -24,6 +24,10 @@ extern "C" {
 #  define DELIM L';'
 #endif
 
+#ifdef __SWITCH__
+#  define DELIM L';'
+#endif
+
 /* Filename separator */
 #ifndef SEP
 #  define SEP L'/'

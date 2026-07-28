@@ -183,7 +183,7 @@ if os_name == 'posix' or os_name == 'darwin':
     BUILDSTDLIB_LANDMARKS = ['Lib/os.py']
     VENV_LANDMARK = 'pyvenv.cfg'
     ZIP_LANDMARK = f'{platlibdir}/python{VERSION_MAJOR}{VERSION_MINOR}{ABI_THREAD}.zip'
-    DELIM = ':'
+    DELIM = config.get('pathsep') or ':'
     SEP = '/'
 
 elif os_name == 'nt':

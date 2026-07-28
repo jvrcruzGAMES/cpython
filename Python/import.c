@@ -813,7 +813,7 @@ _PyImport_ClearModulesByIndex(PyInterpreterState *interp)
    substitute this (if the name actually matches).
 */
 
-#ifdef HAVE_THREAD_LOCAL
+#if defined(HAVE_THREAD_LOCAL) && !defined(__SWITCH__)
 _Py_thread_local const char *pkgcontext = NULL;
 # undef PKGCONTEXT
 # define PKGCONTEXT pkgcontext

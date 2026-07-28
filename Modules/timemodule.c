@@ -1764,7 +1764,7 @@ PyDoc_STRVAR(get_clock_info_doc,
 \n\
 Get information of the specified clock.");
 
-#ifndef HAVE_DECL_TZNAME
+#if !HAVE_DECL_TZNAME
 static void
 get_zone(char *zone, int n, struct tm *p)
 {
@@ -1814,7 +1814,7 @@ init_timezone(PyObject *m)
 
     And I'm lazy and hate C so nyer.
      */
-#ifdef HAVE_DECL_TZNAME
+#if HAVE_DECL_TZNAME
     PyObject *otz0, *otz1;
 #if !defined(MS_WINDOWS) || defined(MS_WINDOWS_DESKTOP) || defined(MS_WINDOWS_SYSTEM)
     tzset();

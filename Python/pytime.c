@@ -862,7 +862,7 @@ _PyTime_AsTimevalTime_t(PyTime_t t, time_t *p_secs, int *us,
 }
 
 
-#if defined(HAVE_CLOCK_GETTIME) || defined(HAVE_KQUEUE)
+#if defined(HAVE_CLOCK_GETTIME) || defined(HAVE_KQUEUE) || defined(__SWITCH__)
 static int
 pytime_as_timespec(PyTime_t ns, struct timespec *ts, int raise_exc)
 {
@@ -1178,6 +1178,16 @@ py_get_monotonic_clock(PyTime_t *tp, _Py_clock_info_t *info, int raise_exc)
         info->resolution = 1e-9;
         info->monotonic = 1;
         info->adjustable = 0;
+    }
+
+#elif defined(__SWITCH__)
+    if (py_get_system_clock(tp, info, raise_exc) < 0) {
+        return -1;
+    }
+    if (info) {
+        info->implementation = "gettimeofday()";
+        info->monotonic = 0;
+        info->adjustable = 1;
     }
 
 #else

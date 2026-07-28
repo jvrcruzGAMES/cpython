@@ -131,6 +131,9 @@
 static void
 init_condattr(void)
 {
+#ifdef __SWITCH__
+    condattr_monotonic = NULL;
+#else
 #ifdef CONDATTR_MONOTONIC
 # define ca _PyRuntime.threads._condattr_monotonic.val
     // XXX We need to check the return code?
@@ -141,12 +144,17 @@ init_condattr(void)
     }
 # undef ca
 #endif  // CONDATTR_MONOTONIC
+#endif  // __SWITCH__
 }
 
 int
 _PyThread_cond_init(PyCOND_T *cond)
 {
+#ifdef __SWITCH__
+    return pthread_cond_init(cond, NULL);
+#else
     return pthread_cond_init(cond, condattr_monotonic);
+#endif
 }
 
 
@@ -436,6 +444,9 @@ PyThread_hang_thread(void)
     while (1) {
 #if defined(__wasi__)
         sleep(9999999);  // WASI doesn't have pause() ?!
+#elif defined(__SWITCH__)
+        struct timespec timeout = {9999999, 0};
+        nanosleep(&timeout, NULL);
 #else
         pause();
 #endif

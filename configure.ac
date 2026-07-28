@@ -342,6 +342,9 @@ then
 	*-*-wasi*)
 	    ac_sys_system=WASI
 	    ;;
+	aarch64-none-elf*)
+	    ac_sys_system=NX
+	    ;;
 	*)
 		# for now, limit cross builds to known configurations
 		MACHDEP="unknown"
@@ -368,6 +371,7 @@ then
 	freebsd*) MACHDEP="freebsd";;
 	linux-android*) MACHDEP="android";;
 	linux*) MACHDEP="linux";;
+	nx*) MACHDEP="nx";;
 	cygwin*) MACHDEP="cygwin";;
 	darwin*) MACHDEP="darwin";;
 	'')	MACHDEP="unknown";;
@@ -389,6 +393,7 @@ dnl files) and "host_prefix" (where we expect to find the files at runtime)
 if test -z "$host_prefix"; then
   AS_CASE([$ac_sys_system],
     [Emscripten], [host_prefix=/],
+    [NX], [host_prefix='romfs:/python'],
     [host_prefix='${prefix}']
   )
 fi
@@ -397,6 +402,7 @@ AC_SUBST([host_prefix])
 if test -z "$host_exec_prefix"; then
   AS_CASE([$ac_sys_system],
     [Emscripten], [host_exec_prefix=$host_prefix],
+    [NX], [host_exec_prefix=$host_prefix],
     [host_exec_prefix='${exec_prefix}']
   )
 fi
@@ -417,6 +423,7 @@ AC_SUBST([host_exec_prefix])
 # configure will fail.
 if test -z "$AR"; then
 	case "$host" in
+		aarch64-none-elf*)            AR=aarch64-none-elf-gcc-ar ;;
 		aarch64-apple-ios*-simulator) AR=arm64-apple-ios-simulator-ar ;;
 		aarch64-apple-ios*)           AR=arm64-apple-ios-ar ;;
 		x86_64-apple-ios*-simulator)  AR=x86_64-apple-ios-simulator-ar ;;
@@ -425,6 +432,7 @@ if test -z "$AR"; then
 fi
 if test -z "$CC"; then
 	case "$host" in
+		aarch64-none-elf*)            CC=aarch64-none-elf-gcc ;;
 		aarch64-apple-ios*-simulator) CC=arm64-apple-ios-simulator-clang ;;
 		aarch64-apple-ios*)           CC=arm64-apple-ios-clang ;;
 		x86_64-apple-ios*-simulator)  CC=x86_64-apple-ios-simulator-clang ;;
@@ -810,6 +818,9 @@ if test "$cross_compiling" = yes; then
 		_host_ident=$(emcc -dumpversion | cut -f1 -d-)-$host_cpu
 		;;
 	wasm32-*-* | wasm64-*-*)
+		_host_ident=$host_cpu
+		;;
+	aarch64-none-elf*)
 		_host_ident=$host_cpu
 		;;
 	*)
@@ -1488,11 +1499,16 @@ then
   case $ac_sys_system in
   CYGWIN*)
     enable_shared="yes";;
+  NX)
+    enable_shared="no";;
   *)
     enable_shared="no";;
   esac
 fi
 AC_MSG_RESULT([$enable_shared])
+if test "$ac_sys_system" = "NX" -a "$enable_shared" = "yes"; then
+  AC_MSG_ERROR([NX homebrew does not support --enable-shared])
+fi
 
 # --with-static-libpython
 STATIC_LIBPYTHON=1
@@ -7845,6 +7861,37 @@ AC_DEFUN([PY_STDLIB_MOD_SET_NA], [
 dnl Modules that are not available on some platforms
 AS_CASE([$ac_sys_system],
   [AIX], [PY_STDLIB_MOD_SET_NA([_scproxy])],
+  [NX], [
+    dnl Nintendo Switch homebrew is statically linked and does not provide the
+    dnl full desktop POSIX process, user database, terminal, or syslog surface.
+    PY_STDLIB_MOD_SET_NA(
+      [_ctypes],
+      [_ctypes_test],
+      [_curses],
+      [_curses_panel],
+      [_dbm],
+      [_gdbm],
+      [_multiprocessing],
+      [_posixshmem],
+      [_posixsubprocess],
+      [_remote_debugging],
+      [_scproxy],
+      [_sqlite3],
+      [_ssl],
+      [_hashlib],
+      [_tkinter],
+      [fcntl],
+      [grp],
+      [mmap],
+      [nis],
+      [pwd],
+      [readline],
+      [resource],
+      [spwd],
+      [syslog],
+      [termios]
+    )
+  ],
   [VxWorks*], [PY_STDLIB_MOD_SET_NA([_scproxy], [termios], [grp])],
   dnl The _scproxy module is available on macOS
   [Darwin], [],
@@ -7948,6 +7995,7 @@ dnl AC_MSG_NOTICE([m4_set_list([_PY_STDLIB_MOD_SET_NA])])
 dnl Default value for Modules/Setup.stdlib build type
 AS_CASE([$host_cpu],
   [wasm32|wasm64], [MODULE_BUILDTYPE=static],
+  [aarch64], [AS_CASE([$ac_sys_system], [NX], [MODULE_BUILDTYPE=static], [MODULE_BUILDTYPE=${MODULE_BUILDTYPE:-shared}])],
   [MODULE_BUILDTYPE=${MODULE_BUILDTYPE:-shared}]
 )
 AC_SUBST([MODULE_BUILDTYPE])

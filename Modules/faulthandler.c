@@ -542,7 +542,11 @@ faulthandler_enable(void)
         sigemptyset(&action.sa_mask);
         /* Do not prevent the signal from being received from within
            its own signal handler */
+#ifdef SA_NODEFER
         action.sa_flags = SA_NODEFER;
+#else
+        action.sa_flags = 0;
+#endif
 #ifdef FAULTHANDLER_USE_ALT_STACK
         assert(stack.ss_sp != NULL);
         /* Call the signal handler on an alternate signal stack
@@ -857,11 +861,17 @@ faulthandler_register(int signum, int chain, _Py_sighandler_t *previous_p)
     /* if the signal is received while the kernel is executing a system
        call, try to restart the system call instead of interrupting it and
        return EINTR. */
+#ifdef SA_RESTART
     action.sa_flags = SA_RESTART;
+#else
+    action.sa_flags = 0;
+#endif
     if (chain) {
         /* do not prevent the signal from being received from within its
            own signal handler */
+#ifdef SA_NODEFER
         action.sa_flags = SA_NODEFER;
+#endif
     }
 #ifdef FAULTHANDLER_USE_ALT_STACK
     assert(stack.ss_sp != NULL);
@@ -1057,7 +1067,7 @@ faulthandler_suppress_crash_report(void)
     SetErrorMode(mode | SEM_NOGPFAULTERRORBOX);
 #endif
 
-#ifdef HAVE_SYS_RESOURCE_H
+#if defined(HAVE_SYS_RESOURCE_H) && !defined(__SWITCH__)
     struct rlimit rl;
 
     /* Disable creation of core dump */

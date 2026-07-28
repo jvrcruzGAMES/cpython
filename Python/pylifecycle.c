@@ -42,6 +42,11 @@
 #ifdef HAVE_UNISTD_H
 #  include <unistd.h>             // isatty()
 #endif
+#ifdef __SWITCH__
+#  include <switch/runtime/devices/console.h>
+#  include <switch/result.h>
+#  include <switch/applets/swkbd.h>
+#endif
 
 #if defined(__APPLE__)
 #  include <AvailabilityMacros.h>
@@ -83,7 +88,6 @@
 #endif
 
 #define PUTS(fd, str) (void)_Py_write_noraise(fd, str, (int)strlen(str))
-
 
 /* Forward declarations */
 static PyStatus add_main_module(PyInterpreterState *interp);
@@ -625,7 +629,6 @@ pycore_create_interpreter(_PyRuntimeState *runtime,
     assert(_Py_IsMainInterpreter(interp));
     _PyInterpreterState_SetWhence(interp, _PyInterpreterState_WHENCE_RUNTIME);
     interp->_ready = 1;
-
     status = _PyConfig_Copy(&interp->config, src_config);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -636,7 +639,6 @@ pycore_create_interpreter(_PyRuntimeState *runtime,
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     PyInterpreterConfig config = _PyInterpreterConfig_LEGACY_INIT;
     // The main interpreter always has its own GIL and supports single-phase
     // init extensions.
@@ -660,12 +662,10 @@ pycore_create_interpreter(_PyRuntimeState *runtime,
     if (_PyMem_init_obmalloc(interp) < 0) {
         return _PyStatus_NO_MEMORY();
     }
-
     status = _PyTraceMalloc_Init();
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     PyThreadState *tstate = _PyThreadState_New(interp,
                                                _PyThreadState_WHENCE_INIT);
     if (tstate == NULL) {
@@ -673,7 +673,6 @@ pycore_create_interpreter(_PyRuntimeState *runtime,
     }
     runtime->main_tstate = tstate;
     _PyThreadState_Bind(tstate);
-
     init_interp_create_gil(tstate, config.gil);
 
     *tstate_p = tstate;
@@ -685,20 +684,16 @@ static PyStatus
 pycore_init_global_objects(PyInterpreterState *interp)
 {
     PyStatus status;
-
     _PyFloat_InitState(interp);
-
     status = _PyUnicode_InitGlobalObjects(interp);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     _PyUnicode_InitState(interp);
 
     if (_Py_IsMainInterpreter(interp)) {
         _Py_GetConstant_Init();
     }
-
     return _PyStatus_OK();
 }
 
@@ -876,12 +871,10 @@ pycore_interp_init(PyThreadState *tstate)
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     status = _PyCode_Init(interp);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     status = _PyDtoa_Init(interp);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -892,38 +885,31 @@ pycore_interp_init(PyThreadState *tstate)
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     status = pycore_init_types(interp);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
-
     if (_PyWarnings_InitState(interp) < 0) {
         return _PyStatus_ERR("can't initialize warnings");
     }
-
     status = _PyAtExit_Init(interp);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     status = _PySys_Create(tstate, &sysmod);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
-
     status = pycore_init_builtins(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
-
     status = _PyXI_Init(interp);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
 
     const PyConfig *config = _PyInterpreterState_GetConfig(interp);
-
     status = _PyImport_InitCore(tstate, sysmod, config->_install_importlib);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
@@ -945,14 +931,12 @@ pyinit_config(_PyRuntimeState *runtime,
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     PyThreadState *tstate;
     status = pycore_create_interpreter(runtime, config, &tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
     *tstate_p = tstate;
-
     status = pycore_interp_init(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -1094,15 +1078,12 @@ pyinit_core(_PyRuntimeState *runtime,
             PyThreadState **tstate_p)
 {
     PyStatus status;
-
     status = _Py_PreInitializeFromConfig(src_config, NULL);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     PyConfig config;
     PyConfig_InitPythonConfig(&config);
-
     status = _PyConfig_Copy(&config, src_config);
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
@@ -1202,11 +1183,9 @@ init_interp_main(PyThreadState *tstate)
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     if (interpreter_update_config(tstate, 1) < 0) {
         return _PyStatus_ERR("failed to update the Python config");
     }
-
     status = _PyImport_InitExternal(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -1219,7 +1198,6 @@ init_interp_main(PyThreadState *tstate)
             return status;
         }
     }
-
     status = _PyUnicode_InitEncodings(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -1252,12 +1230,10 @@ init_interp_main(PyThreadState *tstate)
         }
 #endif
     }
-
     status = init_sys_streams(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
-
     status = init_set_builtins_open();
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -1281,7 +1257,6 @@ init_interp_main(PyThreadState *tstate)
 #ifdef Py_DEBUG
     run_presite(tstate);
 #endif
-
     status = add_main_module(interp);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -1376,15 +1351,12 @@ init_interp_main(PyThreadState *tstate)
             }
         }
     }
-
-
     interp->dict_state.watchers[0] = &builtins_dict_watcher;
     if (PyDict_Watch(0, interp->builtins) != 0) {
         return _PyStatus_ERR("failed to set builtin dict watcher");
     }
 
     assert(!_PyErr_Occurred(tstate));
-
     return _PyStatus_OK();
 }
 
@@ -1428,7 +1400,6 @@ Py_InitializeFromConfig(const PyConfig *config)
     }
 
     PyStatus status;
-
     status = _PyRuntime_Initialize();
     if (_PyStatus_EXCEPTION(status)) {
         return status;
@@ -2622,6 +2593,7 @@ init_import_site(void)
     return _PyStatus_OK();
 }
 
+#ifndef __SWITCH__
 /* returns Py_None if the fd is not valid */
 static PyObject*
 create_stdio(const PyConfig *config, PyObject* io,
@@ -2762,6 +2734,312 @@ error:
     }
     return NULL;
 }
+#endif
+
+#ifdef __SWITCH__
+typedef struct {
+    PyObject_HEAD
+    PyObject *name;
+    PyObject *mode;
+    int readable;
+    int writable;
+} PySwitchConsoleObject;
+
+static void
+switch_console_scroll_if_needed(PrintConsole *console)
+{
+    int bottom = console->windowY + console->windowHeight;
+    if (console->cursorY >= bottom) {
+        if (console->renderer != NULL && console->renderer->scrollWindow != NULL) {
+            console->renderer->scrollWindow(console);
+        }
+        console->cursorY = bottom - 1;
+    }
+}
+
+static void
+switch_console_draw_byte(PrintConsole *console, unsigned char ch)
+{
+    switch (ch) {
+    case '\r':
+        console->cursorX = console->windowX;
+        break;
+    case '\n':
+        console->cursorX = console->windowX;
+        console->cursorY++;
+        switch_console_scroll_if_needed(console);
+        break;
+    case '\t': {
+        int tab_width = console->tabSize > 0 ? console->tabSize : 4;
+        int spaces = tab_width - ((console->cursorX - console->windowX) % tab_width);
+        for (int i = 0; i < spaces; i++) {
+            switch_console_draw_byte(console, ' ');
+        }
+        break;
+    }
+    default:
+        if (ch < ' ') {
+            break;
+        }
+        if (console->cursorX >= console->windowX + console->windowWidth) {
+            console->cursorX = console->windowX;
+            console->cursorY++;
+            switch_console_scroll_if_needed(console);
+        }
+        if (console->renderer != NULL && console->renderer->drawChar != NULL) {
+            console->renderer->drawChar(console, console->cursorX, console->cursorY, ch);
+        }
+        console->cursorX++;
+        break;
+    }
+}
+
+static void
+switch_console_write_bytes(const char *text, Py_ssize_t size)
+{
+    PrintConsole *console = consoleGetDefault();
+    if (console == NULL || !console->consoleInitialised) {
+        fwrite(text, 1, (size_t)size, stdout);
+        fflush(stdout);
+        return;
+    }
+
+    for (Py_ssize_t i = 0; i < size; i++) {
+        switch_console_draw_byte(console, (unsigned char)text[i]);
+    }
+    console->prevCursorX = console->cursorX;
+    console->prevCursorY = console->cursorY;
+    consoleUpdate(console);
+}
+
+static void
+switch_console_dealloc(PyObject *self)
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    Py_XDECREF(stream->name);
+    Py_XDECREF(stream->mode);
+    Py_TYPE(self)->tp_free(self);
+}
+
+static PyObject *
+switch_console_write(PyObject *self, PyObject *arg)
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    if (!stream->writable) {
+        PyErr_SetString(PyExc_OSError, "not writable");
+        return NULL;
+    }
+
+    PyObject *text = arg;
+    PyObject *str = NULL;
+
+    if (!PyUnicode_Check(text)) {
+        str = PyObject_Str(text);
+        if (str == NULL) {
+            return NULL;
+        }
+        text = str;
+    }
+
+    Py_ssize_t size;
+    const char *utf8 = PyUnicode_AsUTF8AndSize(text, &size);
+    if (utf8 == NULL) {
+        Py_XDECREF(str);
+        return NULL;
+    }
+
+    if (size > 0) {
+        switch_console_write_bytes(utf8, size);
+    }
+
+    Py_ssize_t length = PyUnicode_GET_LENGTH(text);
+    Py_XDECREF(str);
+    return PyLong_FromSsize_t(length);
+}
+
+static PyObject *
+switch_console_readline(PyObject *self, PyObject *args)
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    if (!stream->readable) {
+        PyErr_SetString(PyExc_OSError, "not readable");
+        return NULL;
+    }
+
+    Py_ssize_t limit = -1;
+    if (!PyArg_ParseTuple(args, "|n", &limit)) {
+        return NULL;
+    }
+
+    SwkbdConfig keyboard;
+    Result rc = swkbdCreate(&keyboard, 0);
+    if (R_FAILED(rc)) {
+        PyErr_Format(PyExc_OSError,
+                     "failed to create Switch software keyboard: 0x%x",
+                     rc);
+        return NULL;
+    }
+
+    char input[1024];
+    input[0] = '\0';
+
+    swkbdConfigMakePresetDefault(&keyboard);
+    swkbdConfigSetHeaderText(&keyboard, "Python input");
+    swkbdConfigSetStringLenMax(&keyboard, sizeof(input) - 2);
+    swkbdConfigSetReturnButtonFlag(&keyboard, 0);
+
+    Py_BEGIN_ALLOW_THREADS
+    rc = swkbdShow(&keyboard, input, sizeof(input) - 1);
+    Py_END_ALLOW_THREADS
+
+    swkbdClose(&keyboard);
+    consoleUpdate(NULL);
+
+    if (R_FAILED(rc)) {
+        return PyUnicode_New(0, 0);
+    }
+
+    size_t len = strlen(input);
+    if (limit >= 0 && (size_t)limit < len) {
+        len = (size_t)limit;
+    }
+
+    if (limit >= 0 && (size_t)limit <= len) {
+        return PyUnicode_FromStringAndSize(input, len);
+    }
+
+    if (len + 1 >= sizeof(input)) {
+        return PyUnicode_FromStringAndSize(input, len);
+    }
+
+    input[len++] = '\n';
+    input[len] = '\0';
+    return PyUnicode_FromStringAndSize(input, len);
+}
+
+static PyObject *
+switch_console_flush(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    fflush(stdout);
+    consoleUpdate(NULL);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+switch_console_isatty(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
+switch_console_readable(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    if (stream->readable) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+static PyObject *
+switch_console_writable(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    if (stream->writable) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+static PyObject *
+switch_console_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyErr_SetString(PyExc_OSError, "Switch console stream has no file descriptor");
+    return NULL;
+}
+
+static PyObject *
+switch_console_get_encoding(PyObject *self, void *Py_UNUSED(closure))
+{
+    return PyUnicode_FromString("utf-8");
+}
+
+static PyObject *
+switch_console_get_errors(PyObject *self, void *Py_UNUSED(closure))
+{
+    return PyUnicode_FromString("backslashreplace");
+}
+
+static PyObject *
+switch_console_get_name(PyObject *self, void *Py_UNUSED(closure))
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    return Py_NewRef(stream->name);
+}
+
+static PyObject *
+switch_console_get_mode(PyObject *self, void *Py_UNUSED(closure))
+{
+    PySwitchConsoleObject *stream = (PySwitchConsoleObject *)self;
+    return Py_NewRef(stream->mode);
+}
+
+static PyMethodDef switch_console_methods[] = {
+    {"write", switch_console_write, METH_O, NULL},
+    {"readline", switch_console_readline, METH_VARARGS, NULL},
+    {"flush", switch_console_flush, METH_NOARGS, NULL},
+    {"isatty", switch_console_isatty, METH_NOARGS, NULL},
+    {"readable", switch_console_readable, METH_NOARGS, NULL},
+    {"writable", switch_console_writable, METH_NOARGS, NULL},
+    {"fileno", switch_console_fileno, METH_NOARGS, NULL},
+    {NULL, NULL, 0, NULL}
+};
+
+static PyGetSetDef switch_console_getset[] = {
+    {"encoding", switch_console_get_encoding, NULL, NULL, NULL},
+    {"errors", switch_console_get_errors, NULL, NULL, NULL},
+    {"name", switch_console_get_name, NULL, NULL, NULL},
+    {"mode", switch_console_get_mode, NULL, NULL, NULL},
+    {NULL}
+};
+
+static PyTypeObject PySwitchConsole_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_nx.ConsoleStream",
+    .tp_basicsize = sizeof(PySwitchConsoleObject),
+    .tp_dealloc = switch_console_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = switch_console_methods,
+    .tp_getset = switch_console_getset,
+    .tp_new = PyType_GenericNew,
+};
+
+static PyObject *
+create_switch_console_stdio(const char *name, const char *mode,
+                            int readable, int writable)
+{
+    if (PyType_Ready(&PySwitchConsole_Type) < 0) {
+        return NULL;
+    }
+
+    PyObject *stream = PyObject_CallNoArgs((PyObject *)&PySwitchConsole_Type);
+    if (stream == NULL) {
+        return NULL;
+    }
+
+    PySwitchConsoleObject *console_stream = (PySwitchConsoleObject *)stream;
+    console_stream->name = PyUnicode_FromString(name);
+    console_stream->mode = PyUnicode_FromString(mode);
+    console_stream->readable = readable;
+    console_stream->writable = writable;
+    if (console_stream->name == NULL || console_stream->mode == NULL) {
+        Py_DECREF(stream);
+        return NULL;
+    }
+
+    return stream;
+}
+#endif
 
 /* Set builtins.open to io.open */
 static PyStatus
@@ -2802,10 +3080,12 @@ init_sys_streams(PyThreadState *tstate)
 {
     PyObject *iomod = NULL;
     PyObject *std = NULL;
+#ifndef __SWITCH__
     int fd;
     PyObject * encoding_attr;
-    PyStatus res = _PyStatus_OK();
     const PyConfig *config = _PyInterpreterState_GetConfig(tstate->interp);
+#endif
+    PyStatus res = _PyStatus_OK();
 
     /* Check that stdin is not a directory
        Using shell redirection, you can redirect stdin to a directory,
@@ -2820,11 +3100,16 @@ init_sys_streams(PyThreadState *tstate)
     }
 #endif
 
+#ifndef __SWITCH__
     if (!(iomod = PyImport_ImportModule("_io"))) {
         goto error;
     }
+#endif
 
     /* Set sys.stdin */
+#ifdef __SWITCH__
+    std = create_switch_console_stdio("<stdin>", "r", 1, 0);
+#else
     fd = fileno(stdin);
     /* Under some conditions stdin, stdout and stderr may not be connected
      * and fileno() may point to an invalid file descriptor. For example
@@ -2833,6 +3118,7 @@ init_sys_streams(PyThreadState *tstate)
     std = create_stdio(config, iomod, fd, 0, "<stdin>",
                        config->stdio_encoding,
                        config->stdio_errors);
+#endif
     if (std == NULL)
         goto error;
     PySys_SetObject("__stdin__", std);
@@ -2840,10 +3126,14 @@ init_sys_streams(PyThreadState *tstate)
     Py_DECREF(std);
 
     /* Set sys.stdout */
+#ifdef __SWITCH__
+    std = create_switch_console_stdio("<stdout>", "w", 0, 1);
+#else
     fd = fileno(stdout);
     std = create_stdio(config, iomod, fd, 1, "<stdout>",
                        config->stdio_encoding,
                        config->stdio_errors);
+#endif
     if (std == NULL)
         goto error;
     PySys_SetObject("__stdout__", std);
@@ -2852,13 +3142,18 @@ init_sys_streams(PyThreadState *tstate)
 
 #if 1 /* Disable this if you have trouble debugging bootstrap stuff */
     /* Set sys.stderr, replaces the preliminary stderr */
+#ifdef __SWITCH__
+    std = create_switch_console_stdio("<stderr>", "w", 0, 1);
+#else
     fd = fileno(stderr);
     std = create_stdio(config, iomod, fd, 1, "<stderr>",
                        config->stdio_encoding,
                        L"backslashreplace");
+#endif
     if (std == NULL)
         goto error;
 
+#ifndef __SWITCH__
     /* Same as hack above, pre-import stderr's codec to avoid recursion
        when import.c tries to write to stderr in verbose mode. */
     encoding_attr = PyObject_GetAttrString(std, "encoding");
@@ -2871,6 +3166,7 @@ init_sys_streams(PyThreadState *tstate)
         Py_DECREF(encoding_attr);
     }
     _PyErr_Clear(tstate);  /* Not a fatal error if codec isn't available */
+#endif
 
     if (PySys_SetObject("__stderr__", std) < 0) {
         Py_DECREF(std);
@@ -3620,7 +3916,11 @@ PyOS_setsig(int sig, PyOS_sighandler_t handler)
     /* Using SA_ONSTACK is friendlier to other C/C++/Golang-VM code that
      * extension module or embedding code may use where tiny thread stacks
      * are used.  https://bugs.python.org/issue43390 */
+#ifdef SA_ONSTACK
     context.sa_flags = SA_ONSTACK;
+#else
+    context.sa_flags = 0;
+#endif
     if (sigaction(sig, &context, &ocontext) == -1)
         return SIG_ERR;
     return ocontext.sa_handler;

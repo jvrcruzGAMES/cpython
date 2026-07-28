@@ -31,6 +31,7 @@ import marshal
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
+_NX = (sys.platform == 'nx')
 if _MS_WINDOWS:
     import nt as _os
     import winreg
@@ -184,6 +185,13 @@ if _MS_WINDOWS:
 else:
     def _path_isabs(path):
         """Replacement for os.path.isabs."""
+        if _NX and (
+            path.startswith('romfs:')
+            or path.startswith('sdmc:')
+            or path.startswith('ROMFS:')
+            or path.startswith('SDMC:')
+        ):
+            return True
         return path.startswith(path_separators)
 
 

@@ -872,7 +872,11 @@ new_dict(PyInterpreterState *interp,
          Py_ssize_t used, int free_values_on_failure)
 {
     assert(keys != NULL);
+#ifdef __SWITCH__
+    PyDictObject *mp = NULL;
+#else
     PyDictObject *mp = _Py_FREELIST_POP(PyDictObject, dicts);
+#endif
     if (mp == NULL) {
         mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
         if (mp == NULL) {
@@ -3391,7 +3395,11 @@ dict_dealloc(PyObject *self)
         dictkeys_decref(interp, keys, false);
     }
     if (Py_IS_TYPE(mp, &PyDict_Type)) {
+#ifdef __SWITCH__
+        Py_TYPE(mp)->tp_free((PyObject *)mp);
+#else
         _Py_FREELIST_FREE(dicts, mp, Py_TYPE(mp)->tp_free);
+#endif
     }
     else {
         Py_TYPE(mp)->tp_free((PyObject *)mp);

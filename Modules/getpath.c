@@ -924,6 +924,9 @@ _PyConfig_InitPathConfig(PyConfig *config, int compute_path_config)
 #else
         !int_to_dict(dict, "WITH_NEXT_FRAMEWORK", 0) ||
 #endif
+#ifdef __SWITCH__
+        !decode_to_dict(dict, "pathsep", ";") ||
+#endif
         !decode_to_dict(dict, "PREFIX", PREFIX) ||
         !decode_to_dict(dict, "EXEC_PREFIX", EXEC_PREFIX) ||
         !decode_to_dict(dict, "PYTHONPATH", PYTHONPATH) ||

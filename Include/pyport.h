@@ -154,7 +154,11 @@ typedef intptr_t        Py_intptr_t;
 
 #elif HAVE_SSIZE_T
 typedef ssize_t         Py_ssize_t;
-#   define PY_SSIZE_T_MAX SSIZE_MAX
+#   ifdef SSIZE_MAX
+#       define PY_SSIZE_T_MAX SSIZE_MAX
+#   else
+#       define PY_SSIZE_T_MAX INTPTR_MAX
+#   endif
 #elif SIZEOF_VOID_P == SIZEOF_SIZE_T
 typedef Py_intptr_t     Py_ssize_t;
 #   define PY_SSIZE_T_MAX INTPTR_MAX

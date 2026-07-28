@@ -2171,7 +2171,13 @@ _Py_isabs(const wchar_t *path)
     }
     return 1;
 #else
+#ifdef __SWITCH__
+    Py_ssize_t drvsize, rootsize;
+    _Py_skiproot(path, -1, &drvsize, &rootsize);
+    return drvsize != 0 || rootsize != 0;
+#else
     return (path[0] == SEP);
+#endif
 #endif
 }
 
@@ -2313,7 +2319,34 @@ _Py_skiproot(const wchar_t *path, Py_ssize_t size, Py_ssize_t *drvsize,
     assert(rootsize);
 #ifndef MS_WINDOWS
 #define IS_SEP(x) (*(x) == SEP)
+#ifdef __SWITCH__
+#define IS_NX_ROMFS(path) ( \
+    ((path)[0] == L'r' || (path)[0] == L'R') && \
+    ((path)[1] == L'o' || (path)[1] == L'O') && \
+    ((path)[2] == L'm' || (path)[2] == L'M') && \
+    ((path)[3] == L'f' || (path)[3] == L'F') && \
+    ((path)[4] == L's' || (path)[4] == L'S') && \
+    (path)[5] == L':' \
+)
+#define IS_NX_SDMC(path) ( \
+    ((path)[0] == L's' || (path)[0] == L'S') && \
+    ((path)[1] == L'd' || (path)[1] == L'D') && \
+    ((path)[2] == L'm' || (path)[2] == L'M') && \
+    ((path)[3] == L'c' || (path)[3] == L'C') && \
+    (path)[4] == L':' \
+)
+#endif
     *drvsize = 0;
+#ifdef __SWITCH__
+    if ((size < 0 || size >= 6) && IS_NX_ROMFS(path)) {
+        *drvsize = 6;
+        path += *drvsize;
+    }
+    else if ((size < 0 || size >= 5) && IS_NX_SDMC(path)) {
+        *drvsize = 5;
+        path += *drvsize;
+    }
+#endif
     if (!IS_SEP(&path[0])) {
         // Relative path, e.g.: 'foo'
         *rootsize = 0;
@@ -2328,6 +2361,10 @@ _Py_skiproot(const wchar_t *path, Py_ssize_t size, Py_ssize_t *drvsize,
         *rootsize = 2;
     }
 #undef IS_SEP
+#ifdef __SWITCH__
+#undef IS_NX_ROMFS
+#undef IS_NX_SDMC
+#endif
 #else
     const wchar_t *pEnd = size >= 0 ? &path[size] : NULL;
 #define IS_END(x) (pEnd ? (x) == pEnd : !*(x))

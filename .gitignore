@@ -12,6 +12,9 @@
 *.dylib
 *.dSYM
 *.dll
+*.elf
+*.nacp
+*.nro
 *.wasm
 *.orig
 *.pyc
@@ -23,6 +26,8 @@
 *.gc??
 *.profclang?
 *.profraw
+*.lst
+*.map
 # Copies of binaries before BOLT optimizations.
 *.prebolt
 # BOLT profile data.
@@ -154,6 +159,13 @@ Tools/unicode/data/
 /coverage/
 /externals/
 /htmlcov/
+Examples/NX/*/build*/
+Examples/NX/*/romfs/python/
+Examples/NX/*/*.elf
+Examples/NX/*/*.nacp
+Examples/NX/*/*.nro
+Examples/NX/*/*.map
+Examples/NX/*/*.lst
 Tools/msi/obj
 Tools/ssl/amd64
 Tools/ssl/win32

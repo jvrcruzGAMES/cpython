@@ -1,0 +1,8 @@
+build/
+romfs/python/
+*.elf
+*.nacp
+*.nro
+*.map
+__pycache__/
+*.pyc

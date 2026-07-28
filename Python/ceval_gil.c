@@ -8,6 +8,11 @@
 #include "pycore_pystats.h"       // _Py_PrintSpecializationStats()
 #include "pycore_runtime.h"       // _PyRuntime
 
+#ifdef __SWITCH__
+#  include <unistd.h>
+#  include <switch/runtime/devices/console.h>
+#endif
+
 
 /*
    Notes about the implementation:
@@ -285,7 +290,6 @@ static void
 take_gil(PyThreadState *tstate)
 {
     int err = errno;
-
     assert(tstate != NULL);
     /* We shouldn't be using a thread state that isn't viable any more. */
     // XXX It may be more correct to check tstate->_status.finalizing.
@@ -317,7 +321,6 @@ take_gil(PyThreadState *tstate)
 
     /* Check that _PyEval_InitThreads() was called to create the lock */
     assert(gil_created(gil));
-
     MUTEX_LOCK(gil->mutex);
 
     int drop_requested = 0;
@@ -390,7 +393,6 @@ take_gil(PyThreadState *tstate)
     COND_SIGNAL(gil->switch_cond);
     MUTEX_UNLOCK(gil->switch_mutex);
 #endif
-
     if (_PyThreadState_MustExit(tstate)) {
         /* bpo-36475: If Py_Finalize() has been called and tstate is not
            the thread which called Py_Finalize(), gh-87135: hang the
@@ -410,7 +412,6 @@ take_gil(PyThreadState *tstate)
     tstate->holds_gil = 1;
     _Py_unset_eval_breaker_bit(tstate, _PY_GIL_DROP_REQUEST_BIT);
     update_eval_breaker_for_thread(interp, tstate);
-
     MUTEX_UNLOCK(gil->mutex);
 
     errno = err;

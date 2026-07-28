@@ -70,11 +70,16 @@ to avoid the expense of doing their own locking).
 #ifdef HAVE_THREAD_LOCAL
 _Py_thread_local PyThreadState *_Py_tss_tstate = NULL;
 #endif
+#ifdef __SWITCH__
+static PyThreadState *_Py_switch_tstate = NULL;
+#endif
 
 static inline PyThreadState *
 current_fast_get(void)
 {
-#ifdef HAVE_THREAD_LOCAL
+#ifdef __SWITCH__
+    return _Py_switch_tstate;
+#elif defined(HAVE_THREAD_LOCAL)
     return _Py_tss_tstate;
 #else
     // XXX Fall back to the PyThread_tss_*() API.
@@ -86,7 +91,9 @@ static inline void
 current_fast_set(_PyRuntimeState *Py_UNUSED(runtime), PyThreadState *tstate)
 {
     assert(tstate != NULL);
-#ifdef HAVE_THREAD_LOCAL
+#ifdef __SWITCH__
+    _Py_switch_tstate = tstate;
+#elif defined(HAVE_THREAD_LOCAL)
     _Py_tss_tstate = tstate;
 #else
     // XXX Fall back to the PyThread_tss_*() API.
@@ -97,7 +104,9 @@ current_fast_set(_PyRuntimeState *Py_UNUSED(runtime), PyThreadState *tstate)
 static inline void
 current_fast_clear(_PyRuntimeState *Py_UNUSED(runtime))
 {
-#ifdef HAVE_THREAD_LOCAL
+#ifdef __SWITCH__
+    _Py_switch_tstate = NULL;
+#elif defined(HAVE_THREAD_LOCAL)
     _Py_tss_tstate = NULL;
 #else
     // XXX Fall back to the PyThread_tss_*() API.
@@ -629,11 +638,9 @@ init_interpreter(PyInterpreterState *interp,
     if (interp->_initialized) {
         return _PyStatus_ERR("interpreter already initialized");
     }
-
     assert(interp->_whence == _PyInterpreterState_WHENCE_NOTSET);
     assert(check_interpreter_whence(whence) == 0);
     interp->_whence = whence;
-
     assert(runtime != NULL);
     interp->runtime = runtime;
 
@@ -650,7 +657,6 @@ init_interpreter(PyInterpreterState *interp,
 
     // We would call _PyObject_InitState() at this point
     // if interp->feature_flags were alredy set.
-
     _PyEval_InitState(interp);
     _PyGC_InitState(&interp->gc);
     PyConfig_InitPythonConfig(&interp->config);
@@ -713,7 +719,6 @@ init_interpreter(PyInterpreterState *interp,
     _Py_stackref_associate(interp, Py_False, PyStackRef_False);
     _Py_stackref_associate(interp, Py_True, PyStackRef_True);
 #endif
-
     interp->_initialized = 1;
     return _PyStatus_OK();
 }
@@ -779,14 +784,12 @@ _PyInterpreterState_New(PyThreadState *tstate, PyInterpreterState **pinterp)
         }
     }
     interpreters->head = interp;
-
     long whence = _PyInterpreterState_WHENCE_UNKNOWN;
     status = init_interpreter(interp, runtime,
                               id, old_head, whence);
     if (_PyStatus_EXCEPTION(status)) {
         goto error;
     }
-
     HEAD_UNLOCK(runtime);
 
     assert(interp != NULL);
@@ -2198,10 +2201,19 @@ _PyThreadState_Attach(PyThreadState *tstate)
     // to it, we need to ensure errno doesn't change.
     int err = errno;
 #endif
-
     _Py_EnsureTstateNotNULL(tstate);
-    if (current_fast_get() != NULL) {
+    PyThreadState *old_tstate = current_fast_get();
+    if (old_tstate != NULL) {
+#ifdef __SWITCH__
+        if (old_tstate == tstate) {
+            current_fast_clear(&_PyRuntime);
+        }
+        else {
+            current_fast_clear(&_PyRuntime);
+        }
+#else
         Py_FatalError("non-NULL old thread state");
+#endif
     }
     _PyThreadStateImpl *_tstate = (_PyThreadStateImpl *)tstate;
     if (_tstate->c_stack_hard_limit == 0) {

@@ -1,235 +1,208 @@
-This is Python version 3.14.6
-=============================
+Python for Nintendo Switch homebrew
+===================================
 
-.. image:: https://github.com/python/cpython/actions/workflows/build.yml/badge.svg?branch=main&event=push
-   :alt: CPython build status on GitHub Actions
-   :target: https://github.com/python/cpython/actions
+This repository is a fork of CPython 3.14 for Nintendo Switch homebrew.
+It exists to make Python practical as an embedded runtime in ``.nro``
+applications built with devkitPro, devkitA64, and libnx.
 
-.. image:: https://dev.azure.com/python/cpython/_apis/build/status/Azure%20Pipelines%20CI?branchName=main
-   :alt: CPython build status on Azure DevOps
-   :target: https://dev.azure.com/python/cpython/_build/latest?definitionId=4&branchName=main
+The goal is not to replace upstream CPython.  The goal is to keep a small,
+maintained Switch port that can be installed into devkitPro portlibs, linked
+as ``libpython3.14.a``, and loaded from a homebrew application's ``romfs``.
 
-.. image:: https://img.shields.io/badge/discourse-join_chat-brightgreen.svg
-   :alt: Python Discourse chat
-   :target: https://discuss.python.org/
+Why This Fork Exists
+--------------------
 
+Upstream CPython targets desktop, server, mobile, and several embedded-style
+platforms, but Nintendo Switch homebrew has a different runtime shape:
 
-Copyright © 2001 Python Software Foundation.  All rights reserved.
+* applications are statically linked with devkitA64/libnx;
+* shared extension modules are not a normal deployment mechanism;
+* the standard library needs to live in ``romfs:/`` or ``sdmc:/``;
+* many POSIX process, terminal, user database, and dynamic loading APIs are
+  unavailable or unsuitable;
+* embedders need predictable headers, pkg-config files, and a staged runtime
+  tree under ``$DEVKITPRO/portlibs/switch``.
 
-See the end of this file for further copyright and license information.
+This fork carries the Switch-specific configure, path, filesystem, and build
+changes needed for that workflow while staying close to CPython 3.14.
 
-.. contents::
+Supported Filesystems
+---------------------
 
-General Information
+The Switch port treats these roots as first-class Python paths:
+
+* ``romfs:``
+* ``romfs:/``
+* ``sdmc:``
+* ``sdmc:/``
+
+Both rooted forms are supported so embedders can use natural libnx paths while
+still relying on Python path operations such as ``join()``, ``isabs()``,
+``splitroot()``, ``normpath()``, and import path resolution.
+
+Console Integration
 -------------------
 
-- Website: https://www.python.org
-- Source code: https://github.com/python/cpython
-- Issue tracker: https://github.com/python/cpython/issues
-- Documentation: https://docs.python.org
-- Developer's Guide: https://devguide.python.org/
+When an embedded Switch application initializes the libnx console and does not
+install custom Python streams, this fork routes ``sys.stdout`` and
+``sys.stderr`` to that console by default.  Python ``input()`` opens the libnx
+software keyboard.  Embedders can still replace ``sys.stdin``, ``sys.stdout``,
+and ``sys.stderr`` with application-specific objects after initialization.
 
-Contributing to CPython
------------------------
+Build And Install
+-----------------
 
-For more complete instructions on contributing to CPython development,
-see the `Developer Guide`_.
+The primary build entry point is:
 
-.. _Developer Guide: https://devguide.python.org/
+.. code-block:: sh
 
-Using Python
-------------
+   DEVKITPRO=/opt/devkitpro \
+   DEVKITA64=/opt/devkitpro/devkitA64 \
+   PATH=/opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:$PATH \
+   Platforms/NX/build-portlibs.sh
 
-Installable Python kits, and information about using Python, are available at
-`python.org`_.
+By default this installs into:
 
-.. _python.org: https://www.python.org/
+.. code-block:: text
 
-Build Instructions
-------------------
+   $DEVKITPRO/portlibs/switch
 
-On Unix, Linux, BSD, macOS, and Cygwin::
+If that directory is not writable, stage the install instead:
 
-    ./configure
-    make
-    make test
-    sudo make install
+.. code-block:: sh
 
-This will install Python as ``python3``.
+   Platforms/NX/build-portlibs.sh --destdir /tmp/python-switch-stage
 
-You can pass many options to the configure script; run ``./configure --help``
-to find out more.  On macOS case-insensitive file systems and on Cygwin,
-the executable is called ``python.exe``; elsewhere it's just ``python``.
+The installed/staged layout contains:
 
-Building a complete Python installation requires the use of various
-additional third-party libraries, depending on your build platform and
-configure options.  Not all standard library modules are buildable or
-usable on all platforms.  Refer to the
-`Install dependencies <https://devguide.python.org/getting-started/setup-building.html#build-dependencies>`_
-section of the `Developer Guide`_ for current detailed information on
-dependencies for various Linux distributions and macOS.
+.. code-block:: text
 
-On macOS, there are additional configure and build options related
-to macOS framework and universal builds.  Refer to `Mac/README.rst
-<https://github.com/python/cpython/blob/main/Mac/README.rst>`_.
+   include/python3.14/                 C API headers
+   lib/python3.14/config-3.14/         static lib and build config
+   lib/pkgconfig/python-3.14-embed.pc  embedding pkg-config file
+   share/python-switch/romfs/python/   runtime tree for app romfs
 
-On Windows, see `PCbuild/readme.txt
-<https://github.com/python/cpython/blob/main/PCbuild/readme.txt>`_.
+More detailed build and embedding notes are in ``Platforms/NX/README.md``.
+Fork-specific APIs and behavior are documented in ``DOCUMENTATION.rst``.
 
-To build Windows installer, see `Tools/msi/README.txt
-<https://github.com/python/cpython/blob/main/Tools/msi/README.txt>`_.
+Embedded Module Set
+-------------------
 
-If you wish, you can create a subdirectory and invoke configure from there.
-For example::
+The Switch build uses static built-in extension modules.  These are the
+compatible modules this fork currently builds and intends to keep maintained:
 
-    mkdir debug
-    cd debug
-    ../configure --with-pydebug
-    make
-    make test
+* ``array``
+* ``atexit``
+* ``binascii``
+* ``cmath``
+* ``errno``
+* ``faulthandler``
+* ``itertools``
+* ``math``
+* ``posix``
+* ``pyexpat``
+* ``select``
+* ``signal``
+* ``symtable``
+* ``time``
+* ``unicodedata``
+* ``_abc``
+* ``_asyncio``
+* ``_bisect``
+* ``_blake2``
+* ``_codecs``
+* ``_codecs_cn``
+* ``_codecs_hk``
+* ``_codecs_iso2022``
+* ``_codecs_jp``
+* ``_codecs_kr``
+* ``_codecs_tw``
+* ``_collections``
+* ``_csv``
+* ``_datetime``
+* ``_decimal``
+* ``_elementtree``
+* ``_functools``
+* ``_heapq``
+* ``_hmac``
+* ``_interpchannels``
+* ``_interpqueues``
+* ``_interpreters``
+* ``_io``
+* ``_json``
+* ``_locale``
+* ``_lsprof``
+* ``_lzma``
+* ``_md5``
+* ``_multibytecodec``
+* ``_opcode``
+* ``_operator``
+* ``_pickle``
+* ``_queue``
+* ``_random``
+* ``_sha1``
+* ``_sha2``
+* ``_sha3``
+* ``_socket``
+* ``_sre``
+* ``_stat``
+* ``_statistics``
+* ``_struct``
+* ``_suggestions``
+* ``_sysconfig``
+* ``_thread``
+* ``_tracemalloc``
+* ``_types``
+* ``_typing``
+* ``_weakref``
+* ``_zstd``
+* ``_zoneinfo``
+* ``switch_curl``
+* ``switch_ssl``
+* ``zlib``
 
-(This will fail if you *also* built at the top-level directory.  You should do
-a ``make clean`` at the top-level first.)
+Compression support is linked against devkitPro's ``switch-zlib``,
+``switch-liblzma``, and ``switch-zstd`` portlibs.  ``hashlib`` is supported for
+the embedded-safe digest algorithms through CPython's built-in HACL-backed
+modules such as ``_md5``, ``_sha1``, ``_sha2``, ``_sha3``, ``_blake2``, and
+``_hmac``.
 
-To get an optimized build of Python, ``configure --enable-optimizations``
-before you run ``make``.  This sets the default make targets up to enable
-Profile Guided Optimization (PGO) and may be used to auto-enable Link Time
-Optimization (LTO) on some platforms.  For more details, see the sections
-below.
+The ``switch_ssl`` module reports the Switch backend libraries compiled
+into the runtime, including mbedTLS and optional switch-curl.  The
+``switch_curl`` Python module is the stable integration point for packages that
+want to use a curl-backed requests transport on Switch once ``switch-curl`` is
+installed and the low-level binding is available.
 
-Profile Guided Optimization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Unsupported Or Deferred Modules
+-------------------------------
 
-PGO takes advantage of recent versions of the GCC or Clang compilers.  If used,
-either via ``configure --enable-optimizations`` or by manually running
-``make profile-opt`` regardless of configure flags, the optimized build
-process will perform the following steps:
+Some CPython modules are intentionally disabled for Switch because they depend
+on APIs that are not available or not appropriate for a static homebrew
+runtime.  This includes dynamic loading, subprocess and multiprocessing
+support, POSIX shared memory, terminal UI modules, user/group database
+modules, ``mmap``, ``ctypes``, sqlite, OpenSSL-backed ``ssl``/``_hashlib``,
+``ensurepip``, and the CPython test extension modules.
 
-The entire Python directory is cleaned of temporary files that may have
-resulted from a previous compilation.
+``_bz2`` remains disabled until a Switch bzip2 portlib is wired in.  CPython's
+OpenSSL-specific ``_ssl`` and ``_hashlib`` modules are not built against
+mbedTLS because mbedTLS is not an OpenSSL ABI/API replacement; Switch-specific
+TLS/HTTP integrations should use the mbedTLS and curl groundwork exposed by
+``switch_ssl`` and ``switch_curl``.
 
-An instrumented version of the interpreter is built, using suitable compiler
-flags for each flavor. Note that this is just an intermediary step.  The
-binary resulting from this step is not good for real-life workloads as it has
-profiling instructions embedded inside.
-
-After the instrumented interpreter is built, the Makefile will run a training
-workload.  This is necessary in order to profile the interpreter's execution.
-Note also that any output, both stdout and stderr, that may appear at this step
-is suppressed.
-
-The final step is to build the actual interpreter, using the information
-collected from the instrumented one.  The end result will be a Python binary
-that is optimized; suitable for distribution or production installation.
-
-
-Link Time Optimization
-^^^^^^^^^^^^^^^^^^^^^^
-
-Enabled via configure's ``--with-lto`` flag.  LTO takes advantage of the
-ability of recent compiler toolchains to optimize across the otherwise
-arbitrary ``.o`` file boundary when building final executables or shared
-libraries for additional performance gains.
-
-
-What's New
-----------
-
-We have a comprehensive overview of the changes in the `What's New in Python
-3.14 <https://docs.python.org/3.14/whatsnew/3.14.html>`_ document.  For a more
-detailed change log, read `Misc/NEWS
-<https://github.com/python/cpython/tree/main/Misc/NEWS.d>`_, but a full
-accounting of changes can only be gleaned from the `commit history
-<https://github.com/python/cpython/commits/main>`_.
-
-If you want to install multiple versions of Python, see the section below
-entitled "Installing multiple versions".
-
-
-Documentation
--------------
-
-`Documentation for Python 3.14 <https://docs.python.org/3.14/>`_ is online,
-updated daily.
-
-It can also be downloaded in many formats for faster access.  The documentation
-is downloadable in HTML, EPUB, and reStructuredText formats; the latter version
-is primarily for documentation authors, translators, and people with special
-formatting requirements.
-
-For information about building Python's documentation, refer to `Doc/README.rst
-<https://github.com/python/cpython/blob/main/Doc/README.rst>`_.
-
-
-Testing
--------
-
-To test the interpreter, type ``make test`` in the top-level directory.  The
-test set produces some output.  You can generally ignore the messages about
-skipped tests due to optional features which can't be imported.  If a message
-is printed about a failed test or a traceback or core dump is produced,
-something is wrong.
-
-By default, tests are prevented from overusing resources like disk space and
-memory.  To enable these tests, run ``make buildbottest``.
-
-If any tests fail, you can re-run the failing test(s) in verbose mode.  For
-example, if ``test_os`` and ``test_gdb`` failed, you can run::
-
-    make test TESTOPTS="-v test_os test_gdb"
-
-If the failure persists and appears to be a problem with Python rather than
-your environment, you can `file a bug report
-<https://github.com/python/cpython/issues>`_ and include relevant output from
-that command to show the issue.
-
-See `Running & Writing Tests <https://devguide.python.org/testing/run-write-tests.html>`_
-for more on running tests.
-
-Installing multiple versions
-----------------------------
-
-On Unix and Mac systems if you intend to install multiple versions of Python
-using the same installation prefix (``--prefix`` argument to the configure
-script) you must take care that your primary python executable is not
-overwritten by the installation of a different version.  All files and
-directories installed using ``make altinstall`` contain the major and minor
-version and can thus live side-by-side.  ``make install`` also creates
-``${prefix}/bin/python3`` which refers to ``${prefix}/bin/python3.X``.  If you
-intend to install multiple versions using the same prefix you must decide which
-version (if any) is your "primary" version.  Install that version using
-``make install``.  Install all other versions using ``make altinstall``.
-
-For example, if you want to install Python 2.7, 3.6, and 3.14 with 3.14 being the
-primary version, you would execute ``make install`` in your 3.14 build directory
-and ``make altinstall`` in the others.
-
-
-Release Schedule
+Upstream CPython
 ----------------
 
-See `PEP 745 <https://peps.python.org/pep-0745/>`__ for Python 3.14 release details.
+This project is based on CPython and keeps the original license terms.  For
+general Python documentation, language reference material, and upstream
+development information, see:
 
+* https://www.python.org/
+* https://docs.python.org/3.14/
+* https://github.com/python/cpython
 
-Copyright and License Information
----------------------------------
+Copyright and License
+---------------------
 
-
-Copyright © 2001 Python Software Foundation.  All rights reserved.
-
-Copyright © 2000 BeOpen.com.  All rights reserved.
-
-Copyright © 1995-2001 Corporation for National Research Initiatives.  All
-rights reserved.
-
-Copyright © 1991-1995 Stichting Mathematisch Centrum.  All rights reserved.
-
-See the `LICENSE <https://github.com/python/cpython/blob/main/LICENSE>`_ for
-information on the history of this software, terms & conditions for usage, and a
-DISCLAIMER OF ALL WARRANTIES.
-
-This Python distribution contains *no* GNU General Public License (GPL) code,
-so it may be used in proprietary projects.  There are interfaces to some GNU
-code but these are entirely optional.
-
-All trademarks referenced herein are property of their respective holders.
+This fork preserves CPython's copyright and license information.  See
+``LICENSE`` and the files under ``Doc/license.rst`` for the full upstream
+license text and notices.

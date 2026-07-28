@@ -380,7 +380,6 @@ init_global_interned_strings(PyInterpreterState *interp)
 {
     assert(INTERNED_STRINGS == NULL);
     _Py_hashtable_allocator_t hashtable_alloc = {PyMem_RawMalloc, PyMem_RawFree};
-
     INTERNED_STRINGS = _Py_hashtable_new_full(
         hashtable_unicode_hash,
         hashtable_unicode_compare,
@@ -404,7 +403,11 @@ init_global_interned_strings(PyInterpreterState *interp)
     */
     _PyUnicode_InitStaticStrings(interp);
 
-    for (int i = 0; i < 256; i++) {
+    int latin1_limit = 256;
+#ifdef __SWITCH__
+    latin1_limit = 128;
+#endif
+    for (int i = 0; i < latin1_limit; i++) {
         PyObject *s = LATIN1(i);
         _PyUnicode_InternStatic(interp, &s);
         assert(s == LATIN1(i));
@@ -822,6 +825,12 @@ unicode_result(PyObject *unicode)
         if (kind == PyUnicode_1BYTE_KIND) {
             const Py_UCS1 *data = PyUnicode_1BYTE_DATA(unicode);
             Py_UCS1 ch = data[0];
+#ifdef __SWITCH__
+            if (ch >= 128) {
+                assert(_PyUnicode_CheckConsistency(unicode, 1));
+                return unicode;
+            }
+#endif
             PyObject *latin1_char = LATIN1(ch);
             if (unicode != latin1_char) {
                 Py_DECREF(unicode);
@@ -1959,6 +1968,17 @@ unicode_write_cstr(PyObject *unicode, Py_ssize_t index,
 static PyObject*
 get_latin1_char(Py_UCS1 ch)
 {
+#ifdef __SWITCH__
+    if (ch >= 128) {
+        PyObject *unicode = PyUnicode_New(1, ch);
+        if (unicode == NULL) {
+            return NULL;
+        }
+        PyUnicode_1BYTE_DATA(unicode)[0] = ch;
+        assert(_PyUnicode_CheckConsistency(unicode, 1));
+        return unicode;
+    }
+#endif
     PyObject *o = LATIN1(ch);
     return o;
 }
@@ -16050,11 +16070,20 @@ intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
     /* if it's a short string, get the singleton */
     if (PyUnicode_GET_LENGTH(s) == 1 &&
                 PyUnicode_KIND(s) == PyUnicode_1BYTE_KIND) {
-        PyObject *r = LATIN1(*(unsigned char*)PyUnicode_DATA(s));
+        unsigned char ch = *(unsigned char*)PyUnicode_DATA(s);
+#ifdef __SWITCH__
+        if (ch >= 128) {
+            goto skip_latin1_singleton;
+        }
+#endif
+        PyObject *r = LATIN1(ch);
         assert(PyUnicode_CHECK_INTERNED(r));
         Py_DECREF(s);
         return r;
     }
+#ifdef __SWITCH__
+skip_latin1_singleton:
+#endif
 #ifdef Py_DEBUG
     assert(!unicode_is_singleton(s));
 #endif

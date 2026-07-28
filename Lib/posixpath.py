@@ -29,6 +29,14 @@ import stat
 import genericpath
 from genericpath import *
 
+_is_nx = sys.platform == 'nx'
+_nx_drives = ('romfs:', 'sdmc:')
+_nx_byte_drives = (b'romfs:', b'sdmc:')
+
+if _is_nx:
+    pathsep = ';'
+    defpath = 'sdmc:/switch;romfs:/'
+
 __all__ = ["normcase","isabs","join","splitdrive","splitroot","split","splitext",
            "basename","dirname","commonprefix","getsize","getmtime",
            "getatime","getctime","islink","exists","lexists","isdir","isfile",
@@ -62,6 +70,11 @@ def isabs(s):
     """Test whether a path is absolute"""
     s = os.fspath(s)
     sep = _get_sep(s)
+    if _is_nx:
+        drive, root, _ = splitroot(s)
+        return bool(root) or drive in (
+            _nx_byte_drives if isinstance(s, bytes) else _nx_drives
+        )
     return s.startswith(sep)
 
 
@@ -80,6 +93,15 @@ def join(a, *p):
     try:
         for b in p:
             b = os.fspath(b)
+            if _is_nx:
+                b_drive, b_root, b_tail = splitroot(b)
+                if b_drive:
+                    path = b
+                    continue
+                if b_root:
+                    path_drive, _, _ = splitroot(path)
+                    path = path_drive + b_root + b_tail
+                    continue
             if b.startswith(sep) or not path:
                 path = b
             elif path.endswith(sep):
@@ -132,6 +154,13 @@ def splitdrive(p):
     """Split a pathname into drive and path. On Posix, drive is always
     empty."""
     p = os.fspath(p)
+    if _is_nx:
+        romfs = b'romfs:' if isinstance(p, bytes) else 'romfs:'
+        sdmc = b'sdmc:' if isinstance(p, bytes) else 'sdmc:'
+        if p[:6].lower() == romfs:
+            return p[:6], p[6:]
+        if p[:5].lower() == sdmc:
+            return p[:5], p[5:]
     return p[:0], p
 
 
@@ -149,16 +178,20 @@ except ImportError:
         else:
             sep = '/'
             empty = ''
+        if _is_nx:
+            drive, p = splitdrive(p)
+        else:
+            drive = empty
         if p[:1] != sep:
             # Relative path, e.g.: 'foo'
-            return empty, empty, p
+            return drive, empty, p
         elif p[1:2] != sep or p[2:3] == sep:
             # Absolute path, e.g.: '/foo', '///foo', '////foo', etc.
-            return empty, sep, p[1:]
+            return drive, sep, p[1:]
         else:
             # Precisely two leading slashes, e.g.: '//foo'. Implementation defined per POSIX, see
             # https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_13
-            return empty, p[:2], p[2:]
+            return drive, p[:2], p[2:]
 
 
 # Return the tail (basename) part of a path, same as split(path)[1].
@@ -354,7 +387,7 @@ except ImportError:
             dotdot = '..'
         if not path:
             return dot
-        _, initial_slashes, path = splitroot(path)
+        drive, initial_slashes, path = splitroot(path)
         comps = path.split(sep)
         new_comps = []
         for comp in comps:
@@ -366,7 +399,7 @@ except ImportError:
             elif new_comps:
                 new_comps.pop()
         comps = new_comps
-        path = initial_slashes + sep.join(comps)
+        path = drive + initial_slashes + sep.join(comps)
         return path or dot
 
 
@@ -374,10 +407,14 @@ def abspath(path):
     """Return an absolute path."""
     path = os.fspath(path)
     if isinstance(path, bytes):
-        if not path.startswith(b'/'):
+        if _is_nx and splitdrive(path)[0]:
+            pass
+        elif not path.startswith(b'/'):
             path = join(os.getcwdb(), path)
     else:
-        if not path.startswith('/'):
+        if _is_nx and splitdrive(path)[0]:
+            pass
+        elif not path.startswith('/'):
             path = join(os.getcwd(), path)
     return normpath(path)
 

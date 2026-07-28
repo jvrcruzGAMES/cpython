@@ -69,6 +69,17 @@ class PosixPathTest(unittest.TestCase):
         self.assertEqual(fn("a", "/b", "c"),   "/b/c")
         self.assertEqual(fn("a", "/b", "/c"),  "/c")
 
+    @unittest.skipUnless(sys.platform == 'nx', 'NX-specific filesystem roots')
+    def test_join_nx_filesystems(self):
+        fn = posixpath.join
+        self.assertEqual(fn("romfs:", "python.py"), "romfs:/python.py")
+        self.assertEqual(fn("romfs:/Lib", "os.py"), "romfs:/Lib/os.py")
+        self.assertEqual(fn("romfs:/Lib", "/site.py"), "romfs:/site.py")
+        self.assertEqual(fn("romfs:/Lib", "sdmc:/site.py"), "sdmc:/site.py")
+
+        self.assertEqual(fn(b"romfs:", b"python.py"), b"romfs:/python.py")
+        self.assertEqual(fn(b"sdmc:/switch", b"python"), b"sdmc:/switch/python")
+
     def test_split(self):
         self.assertEqual(posixpath.split("/foo/bar"), ("/foo", "bar"))
         self.assertEqual(posixpath.split("/"), ("/", ""))
@@ -150,6 +161,21 @@ class PosixPathTest(unittest.TestCase):
         self.assertEqual(f(b'//a'), (b'', b'//', b'a'))
         self.assertEqual(f(b'///a'), (b'', b'/', b'//a'))
 
+    @unittest.skipUnless(sys.platform == 'nx', 'NX-specific filesystem roots')
+    def test_splitroot_nx_filesystems(self):
+        f = posixpath.splitroot
+        self.assertEqual(f('romfs:'), ('romfs:', '', ''))
+        self.assertEqual(f('romfs:/'), ('romfs:', '/', ''))
+        self.assertEqual(f('romfs:/Lib/os.py'), ('romfs:', '/', 'Lib/os.py'))
+        self.assertEqual(f('sdmc:'), ('sdmc:', '', ''))
+        self.assertEqual(f('sdmc:/switch/python'), ('sdmc:', '/', 'switch/python'))
+        self.assertEqual(f('SDMC:/switch/python'), ('SDMC:', '/', 'switch/python'))
+        self.assertEqual(f('cache:/file'), ('', '', 'cache:/file'))
+
+        self.assertEqual(f(b'romfs:'), (b'romfs:', b'', b''))
+        self.assertEqual(f(b'romfs:/Lib/os.py'), (b'romfs:', b'/', b'Lib/os.py'))
+        self.assertEqual(f(b'sdmc:/switch/python'), (b'sdmc:', b'/', b'switch/python'))
+
     def test_isabs(self):
         self.assertIs(posixpath.isabs(""), False)
         self.assertIs(posixpath.isabs("/"), True)
@@ -162,6 +188,18 @@ class PosixPathTest(unittest.TestCase):
         self.assertIs(posixpath.isabs(b"/foo"), True)
         self.assertIs(posixpath.isabs(b"/foo/bar"), True)
         self.assertIs(posixpath.isabs(b"foo/bar"), False)
+
+    @unittest.skipUnless(sys.platform == 'nx', 'NX-specific filesystem roots')
+    def test_isabs_nx_filesystems(self):
+        self.assertIs(posixpath.isabs("romfs:"), True)
+        self.assertIs(posixpath.isabs("romfs:/"), True)
+        self.assertIs(posixpath.isabs("romfs:/Lib/os.py"), True)
+        self.assertIs(posixpath.isabs("sdmc:"), True)
+        self.assertIs(posixpath.isabs("sdmc:/switch/python"), True)
+        self.assertIs(posixpath.isabs("cache:/file"), False)
+
+        self.assertIs(posixpath.isabs(b"romfs:"), True)
+        self.assertIs(posixpath.isabs(b"sdmc:/switch/python"), True)
 
     def test_basename(self):
         self.assertEqual(posixpath.basename("/foo/bar"), "bar")
