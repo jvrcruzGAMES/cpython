@@ -49,6 +49,18 @@ install custom Python streams, this fork routes ``sys.stdout`` and
 software keyboard.  Embedders can still replace ``sys.stdin``, ``sys.stdout``,
 and ``sys.stderr`` with application-specific objects after initialization.
 
+NX control through ``sys`` is disabled by default.  A host NRO can opt in by
+including ``switch_support.h`` and calling ``PySwitch_EnableSysIntegration()``
+after ``Py_InitializeFromConfig()``.  When enabled, Python code gets a
+``sys.switch`` namespace with helpers such as ``applet_main_loop()``,
+``request_exit()``, ``console_update()``, and ``sleep()``.
+
+``switch_ssl`` TLS helpers and ``switch_curl`` HTTP transfers are also disabled
+by default at runtime.  A host NRO can opt in with
+``PySwitch_EnableSSLIntegration()`` and ``PySwitch_EnableCurlIntegration()``,
+or Python code can call the matching ``switch_support.enable_*_integration()``
+helpers when the host allows that policy.
+
 Build And Install
 -----------------
 
@@ -148,6 +160,7 @@ compatible modules this fork currently builds and intends to keep maintained:
 * ``_stat``
 * ``_statistics``
 * ``_struct``
+* ``_switch_curl`` (when ``switch-curl`` is available)
 * ``_suggestions``
 * ``_sysconfig``
 * ``_thread``
@@ -157,8 +170,10 @@ compatible modules this fork currently builds and intends to keep maintained:
 * ``_weakref``
 * ``_zstd``
 * ``_zoneinfo``
+* ``switch_input`` (Python wrapper; native backend is optional)
 * ``switch_curl``
 * ``switch_ssl``
+* ``switch_support``
 * ``zlib``
 
 Compression support is linked against devkitPro's ``switch-zlib``,
@@ -167,11 +182,30 @@ the embedded-safe digest algorithms through CPython's built-in HACL-backed
 modules such as ``_md5``, ``_sha1``, ``_sha2``, ``_sha3``, ``_blake2``, and
 ``_hmac``.
 
-The ``switch_ssl`` module reports the Switch backend libraries compiled
-into the runtime, including mbedTLS and optional switch-curl.  The
-``switch_curl`` Python module is the stable integration point for packages that
-want to use a curl-backed requests transport on Switch once ``switch-curl`` is
-installed and the low-level binding is available.
+The ``switch_support`` module reports Switch environment and backend
+information, including firmware version, product model, linked compression
+libraries, mbedTLS, and optional switch-curl.
+
+The ``switch_ssl`` module exposes mbedTLS-backed helpers such as
+``RAND_bytes()``, ``RAND_status()``, ``mbedtls_version()``,
+``mbedtls_strerror()``, and an ``SSLContext`` object for TLS configuration.
+Active TLS operations require the runtime SSL opt-in.
+
+The ``switch_curl`` Python module is the stable integration point for packages
+that want to use curl-backed HTTP on Switch.  It provides curl-like handles
+(``Curl.setopt()``, ``Curl.perform()``, ``Curl.getinfo()``), high-level
+``request()`` / ``get()`` / ``post()`` helpers, a small ``Session`` object, and
+requests adapter groundwork.  When devkitPro's ``switch-curl`` portlib is
+available, the build links the native ``_switch_curl`` backend automatically.
+HTTP transfers and the requests adapter require the runtime curl opt-in.  The
+native binding initializes the libnx socket service lazily before the first
+transfer.
+
+The ``switch_input`` Python module exposes controller polling helpers.  Its
+native libnx backend is disabled by default and can be built with
+``Platforms/NX/build-portlibs.sh --enable-switch-input`` or ``SWITCH_INPUT=1``.
+The module also provides a small wrapper compatible with the shape of the
+third-party ``inputs`` package.
 
 Unsupported Or Deferred Modules
 -------------------------------

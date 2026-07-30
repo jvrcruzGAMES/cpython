@@ -1,9 +1,16 @@
 #include <Python.h>
+#include <switch_support.h>
 #include <switch.h>
 
 #ifndef SWITCH_PYTHON_HOME
 #define SWITCH_PYTHON_HOME "romfs:/python"
 #endif
+
+#ifndef SWITCH_PYTHON_SITE_PACKAGES
+#define SWITCH_PYTHON_SITE_PACKAGES "romfs:/python_site"
+#endif
+
+PyMODINIT_FUNC PyInit__nx_native_demo(void);
 
 __attribute__((used)) size_t __stacksize__ = SWITCH_PYTHON_STACK_SIZE;
 
@@ -69,6 +76,8 @@ print_python_exception_to_console(void)
 int
 main(int argc, char *argv[])
 {
+    bool romfs_initialized = false;
+
     consoleInit(NULL);
     consoleUpdate(NULL);
 
@@ -78,6 +87,7 @@ main(int argc, char *argv[])
         printf("Press PLUS to exit.\n");
         goto wait_for_exit;
     }
+    romfs_initialized = true;
 
     PyStatus status;
     PyConfig config;
@@ -91,6 +101,11 @@ main(int argc, char *argv[])
     config.write_bytecode = 0;
     config.use_hash_seed = 1;
     config.hash_seed = 0;
+
+    if (PyImport_AppendInittab("_nx_native_demo", PyInit__nx_native_demo) < 0) {
+        printf("failed to register _nx_native_demo\n");
+        goto wait_for_exit;
+    }
 
     printf("Initializing Python...\n");
     consoleUpdate(NULL);
@@ -132,6 +147,11 @@ main(int argc, char *argv[])
         PyConfig_Clear(&config);
         goto wait_for_exit;
     }
+    status = append_bytes_path(&config.module_search_paths, SWITCH_PYTHON_SITE_PACKAGES);
+    if (print_python_status(status)) {
+        PyConfig_Clear(&config);
+        goto wait_for_exit;
+    }
 
     printf("Enter Py_InitializeFromConfig...\n");
     consoleUpdate(NULL);
@@ -143,6 +163,27 @@ main(int argc, char *argv[])
 
     printf("Python initialized. [NX example build marker: stdout-diagnose-2]\n");
     consoleUpdate(NULL);
+
+    if (PySwitch_EnableSysIntegration() < 0) {
+        print_python_exception_to_console();
+        Py_Finalize();
+        goto wait_for_exit;
+    }
+    if (PySwitch_EnableSSLIntegration() < 0) {
+        print_python_exception_to_console();
+        Py_Finalize();
+        goto wait_for_exit;
+    }
+    if (PySwitch_EnableCurlIntegration() < 0) {
+        print_python_exception_to_console();
+        Py_Finalize();
+        goto wait_for_exit;
+    }
+    if (PySwitch_EnableInputIntegration() < 0) {
+        print_python_exception_to_console();
+        Py_Finalize();
+        goto wait_for_exit;
+    }
 
     printf("Running Python script...\n");
     consoleUpdate(NULL);
@@ -158,7 +199,8 @@ main(int argc, char *argv[])
         "    raise\n"
         "print('Python feature script finished.', flush=True)\n"
     );
-    if (result != 0) {
+    bool python_failed = result != 0;
+    if (python_failed) {
         print_python_exception_to_console();
     }
     else {
@@ -167,6 +209,13 @@ main(int argc, char *argv[])
     consoleUpdate(NULL);
 
     Py_Finalize();
+    if (!python_failed) {
+        if (romfs_initialized) {
+            romfsExit();
+        }
+        consoleExit(NULL);
+        return 0;
+    }
 
 wait_for_exit:
     printf("\\nPress PLUS to exit.\\n");
@@ -183,7 +232,9 @@ wait_for_exit:
         consoleUpdate(NULL);
     }
 
-    romfsExit();
+    if (romfs_initialized) {
+        romfsExit();
+    }
     consoleExit(NULL);
     return 0;
 }

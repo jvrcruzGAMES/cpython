@@ -25,8 +25,16 @@ sudo dkp-pacman -Syu \
 ```
 
 Ensure `DEVKITPRO` and `DEVKITA64` are set, and that the devkitA64 tools are on
-`PATH`. If `switch-curl` is omitted, the build helper will still build CPython
-and `switch_ssl` will report curl as unavailable.
+`PATH`. If `switch-curl` is available, the build helper automatically links
+the native `_switch_curl` backend used by `switch_curl.Curl.perform()` and the
+requests adapter. If `switch-curl` is omitted, the build helper will still
+build CPython and `switch_curl` will report curl as unavailable.
+
+`switch_ssl` and `switch_curl` are inactive by default at runtime. Embedders
+that want Python code to use TLS helpers or curl transfers must call
+`PySwitch_EnableSSLIntegration()` and `PySwitch_EnableCurlIntegration()` after
+`Py_InitializeFromConfig()`, or expose the matching `switch_support`
+Python opt-ins deliberately.
 
 ## Portlibs install
 
@@ -67,6 +75,11 @@ For a staged install without writing to `$DEVKITPRO`, use:
 Platforms/NX/build-portlibs.sh --destdir /tmp/python-switch-stage
 ```
 
+The native controller input backend is built for Switch portlibs by default.
+It is disabled at runtime until the host NRO opts in with
+`PySwitch_EnableInputIntegration()`. The public `switch_input` Python module
+uses that backend for libnx pad polling and software keyboard prompts.
+
 ## Embedding
 
 A minimal embedding example is available in `Platforms/NX/templates`. One way
@@ -91,7 +104,8 @@ pkg-config --cflags --libs python3-embed
 A complete feature example is available in both `Examples/NX/make` and
 `Examples/NX/cmake`. Each embeds CPython in a libnx application and runs
 examples for the Switch filesystem roots, compression modules, `hashlib`,
-`switch_ssl`, and `switch_curl` groundwork:
+`switch_support`, `switch_ssl`, `switch_curl` groundwork, and optional
+host-enabled `switch_input` controller polling:
 
 ```sh
 cd Examples/NX/make
@@ -158,7 +172,8 @@ database modules, terminal UI modules, `mmap`, OpenSSL, sqlite, ctypes,
 multiprocessing, subprocess support, and ensurepip by default.
 
 `zlib`, `_lzma`, and `_zstd` are built from `switch-zlib`, `switch-liblzma`,
-and `switch-libzstd`. `switch_ssl` reports the linked compression, mbedTLS,
-and optional switch-curl backends. CPython's OpenSSL-specific `_ssl` and
+and `switch-libzstd`. `switch_support` reports the linked compression,
+mbedTLS, optional switch-curl backends, firmware, and product model. CPython's
+OpenSSL-specific `_ssl` and
 `_hashlib` modules remain disabled; `hashlib` uses CPython's built-in digest
 modules for the supported embedded algorithms.

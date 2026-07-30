@@ -14,6 +14,11 @@ PATH=/opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:$PATH \
 Platforms/NX/build-portlibs.sh
 ```
 
+The native example enables controller input at runtime with
+`PySwitch_EnableInputIntegration()`. Host apps that skip this call can still
+import `switch_input`, but controller polling and software keyboard helpers
+report unavailable.
+
 Install the Switch portlibs used by the examples:
 
 ```sh
@@ -66,20 +71,91 @@ After installing the portlibs, copy the staged runtime into this project:
 make prepare-romfs
 ```
 
+This also runs pip against `../requirements.txt` and bundles pure-Python
+third-party packages into:
+
+```text
+romfs:/python_site
+```
+
+The default package bundle includes `requests` and its dependencies.  Override
+`PYTHON_SITE_PACKAGES` to choose the import path appended by the host app, and
+override `PYTHON_PACKAGE_TARGET` to choose the matching RomFS staging
+directory.
+
+```sh
+make PYTHON_SITE_PACKAGES=romfs:/vendor PYTHON_PACKAGE_TARGET=romfs/vendor
+```
+
+If your host has no `python3 -m pip`, set `PYTHON_PIP` to the pip command to
+use.
+
+```sh
+make PYTHON_PIP="python3.14 -m pip"
+```
+
 The project already includes:
 
 ```text
 romfs/python_examples/demo.py
 ```
 
+When `switch_input` is built, `demo.py` controls the libnx console as a Python
+CLI: D-pad or left stick selects a feature, `A` runs it, `X` runs every
+non-interactive feature, `L` / `R` scroll output, `B` returns to the menu, and
+`+` exits. The menu includes direct `switch_curl` and requests-adapter HTTP
+tests, a live controller event viewer, and a small `switch_input` Flappy-style
+game. Without the native input backend, the demo falls back to printing all
+non-interactive examples once.
+
 RomFS is only used for readable Python files and data. Native wheels, native
 extension modules, `.so`, `.nro`, `.nso`, and `.elf` payloads are rejected by
 `make prepare-romfs`; link native modules into the NRO or package executable
 code in an executable title layout.
 
-The example initializes the libnx console before Python starts.  With the
+## Native Wheel Modules
+
+The example includes `_nx_native_demo`, a tiny C extension module that
+represents the native payload from a Switch-built wheel.  Its code is compiled
+from `source/nx_native_demo.c` and linked into the main NRO, so it lands in the
+executable image instead of RomFS.
+
+Declare and register the module before `Py_InitializeFromConfig()`:
+
+```c
+PyMODINIT_FUNC PyInit__nx_native_demo(void);
+
+PyImport_AppendInittab("_nx_native_demo", PyInit__nx_native_demo);
+```
+
+Because the Makefile builds every `source/*.c` file with the CPython embed
+cflags, the module is linked into the host app automatically.  Python can then
+import it normally:
+
+```python
+import _nx_native_demo
+```
+
+For a real wheel, build the extension sources with the devkitA64 compiler and
+the CPython embed cflags from `python-3.14-embed.pc`, link the resulting object
+or static archive into the NRO, and install only pure Python files, package
+metadata, and data files into `romfs:/python_site`.
+
+The example initializes the libnx console before Python starts. With the
 default Switch streams, Python `print()` and tracebacks appear on that console,
-and Python `input()` opens the libnx software keyboard.
+and Python `input()` opens the libnx software keyboard. HTTP transfers through
+`switch_curl` lazily initialize the libnx socket service from Python; the
+console still needs an active network connection.
+
+After Python initializes, the example calls `PySwitch_EnableSysIntegration()`
+from `switch_support.h`.  This opt-in adds `sys.switch` for NX lifecycle and
+console helpers; it is disabled by default for host applications that do not
+request it.
+
+The example also calls `PySwitch_EnableSSLIntegration()` and
+`PySwitch_EnableCurlIntegration()` before running the script. Without those
+opt-ins, `switch_ssl` and `switch_curl` remain importable for probing, but
+active TLS helpers, curl transfers, and the requests adapter are disabled.
 
 ## Covered Features
 
@@ -90,6 +166,17 @@ The demo exercises:
 * `lzma`
 * `compression.zstd` / `_zstd`
 * `hashlib` using built-in digest modules
-* `switch_ssl.backends()`
-* `switch_curl.available()` and `switch_curl.backends()`
+* `switch_support.backends()` and `switch_support.environment()`
+* opt-in `sys.switch` NX helpers
+* `switch_ssl.RAND_bytes()` and
+  `switch_ssl.create_default_context()`
+* `switch_curl.available()`, curl-style handles, and
+  `switch_curl.version_info()`
+* direct `switch_curl` HTTP GET
+* requests HTTP through the `switch_curl` adapter
+* optional `switch_input` controller polling and its `inputs`-style wrapper
+* live controller event display
+* a small `switch_input` Flappy-style game
+* bundled `requests`
 * the requests adapter hook exposed by `switch_curl.install_requests_adapter()`
+* native extension code linked into the NRO and imported from Python

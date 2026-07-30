@@ -18,12 +18,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 
 PYTHON_PREFIX ?= $(DEVKITPRO)/portlibs/switch
 PYTHON_PC ?= python-3.14-embed
+PYTHON_SITE_PACKAGES ?= romfs:/python_site
+PYTHON_PACKAGE_TARGET ?= romfs/python_site
+PYTHON_REQUIREMENTS ?= ../requirements.txt
+PYTHON_PIP ?= python3 -m pip
 PYTHON_PKG_CONFIG := PKG_CONFIG_LIBDIR=$(PYTHON_PREFIX)/lib/pkgconfig pkg-config --define-variable=prefix=$(PYTHON_PREFIX) --define-variable=exec_prefix=$(PYTHON_PREFIX)
 PYTHON_CFLAGS := $(shell $(PYTHON_PKG_CONFIG) --cflags $(PYTHON_PC))
 PYTHON_LIBS := $(shell $(PYTHON_PKG_CONFIG) --static --libs $(PYTHON_PC))
 
 CFLAGS += -g -Wall -O2 -ffunction-sections $(PYTHON_CFLAGS)
-CFLAGS += $(ARCH) $(INCLUDE) -D__SWITCH__
+CFLAGS += $(ARCH) $(INCLUDE) -D__SWITCH__ -DSWITCH_PYTHON_SITE_PACKAGES=\"$(PYTHON_SITE_PACKAGES)\"
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS := -g $(ARCH)
 LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map) -Wl,-z,notext -Wl,-u,__stacksize__
@@ -57,23 +61,37 @@ export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
                   -I$(CURDIR)/$(BUILD)
 export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-.PHONY: all clean prepare-romfs
+.PHONY: all clean prepare-romfs bundle-packages
 
-all: $(BUILD)
+all: prepare-romfs $(BUILD)
 
-prepare-romfs:
+bundle-packages:
+	@test -f "$(PYTHON_REQUIREMENTS)" || { echo "Missing $(PYTHON_REQUIREMENTS)"; exit 1; }
+	@rm -rf "$(PYTHON_PACKAGE_TARGET)"
+	@mkdir -p "$(PYTHON_PACKAGE_TARGET)"
+	@$(PYTHON_PIP) install --disable-pip-version-check --no-compile \
+		--only-binary=:all: --implementation py --python-version 3.14 \
+		--abi none --platform any \
+		--target "$(PYTHON_PACKAGE_TARGET)" \
+		-r "$(PYTHON_REQUIREMENTS)"
+	@! find "$(PYTHON_PACKAGE_TARGET)" -type f \( -name '*.so' -o -name '*.pyd' -o -name '*.nro' -o -name '*.nso' -o -name '*.elf' \) -print | grep . || { echo "Native package payloads cannot be packed into romfs; link them or package executable code outside romfs."; exit 1; }
+
+prepare-romfs: bundle-packages
 	@test -d "$(PYTHON_PREFIX)/share/python-switch/romfs/python" || { echo "Missing $(PYTHON_PREFIX)/share/python-switch/romfs/python"; exit 1; }
 	@! find "$(PYTHON_PREFIX)/share/python-switch/romfs/python" -type f \( -name '*.so' -o -name '*.pyd' -o -name '*.nro' -o -name '*.nso' -o -name '*.elf' \) -print | grep . || { echo "Native Python payloads cannot be packed into romfs; link them or package them in an executable title layout."; exit 1; }
 	@rm -rf romfs/python
 	@mkdir -p romfs
 	@cp -R "$(PYTHON_PREFIX)/share/python-switch/romfs/python" romfs/
+	@rm -f romfs/python/switch_curl.py
+	@find romfs -path '*/__pycache__/*' -delete
+	@find romfs -type d -name '__pycache__' -empty -delete
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 clean:
-	@rm -rf $(BUILD) $(TARGET).elf $(TARGET).nro $(TARGET).nacp
+	@rm -rf $(BUILD) $(TARGET).elf $(TARGET).nro $(TARGET).nacp romfs/python_site
 
 else
 
