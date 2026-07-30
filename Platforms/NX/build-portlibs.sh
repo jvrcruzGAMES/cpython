@@ -22,9 +22,10 @@ Options:
   --clean                Remove the NX build directory before configuring
   --help                 Show this help
 
-The script expects DEVKITPRO and DEVKITA64 to be set and devkitA64 to be
-installed. It builds a native host Python first, then cross-builds CPython with
-devkitA64 and installs headers, libpython, pkg-config files, and romfs assets.
+The script defaults DEVKITPRO to /opt/devkitpro and DEVKITA64 to
+$DEVKITPRO/devkitA64 when they are not set. It builds a native host Python
+first, then cross-builds CPython with devkitA64 and installs headers,
+libpython, pkg-config files, and romfs assets.
 EOF
 }
 
@@ -51,6 +52,27 @@ abs_path() {
 }
 
 srcdir=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+
+if [ -z "${DEVKITPRO:-}" ]; then
+    DEVKITPRO=/opt/devkitpro
+    export DEVKITPRO
+fi
+
+if [ -z "${DEVKITA64:-}" ]; then
+    DEVKITA64=$DEVKITPRO/devkitA64
+    export DEVKITA64
+fi
+
+for bindir in "$DEVKITA64/bin" "$DEVKITPRO/tools/bin"; do
+    if [ -d "$bindir" ]; then
+        case ":$PATH:" in
+            *":$bindir:"*) ;;
+            *) PATH=$bindir:$PATH ;;
+        esac
+    fi
+done
+export PATH
+
 build_dir=$srcdir/build/nx-portlibs
 prefix=${DEVKITPRO:-}/portlibs/switch
 runtime_prefix=romfs:/python
@@ -375,7 +397,10 @@ if [ -f "$install_prefix/lib/python$version/config-$ldversion/libpyexpat.a" ]; t
 fi
 embed_private_libs="$embed_private_libs -lm"
 if [ -f "$embed_pc" ]; then
-    run_install sed -i "s|^Libs.private:.*|Libs.private: $embed_private_libs|" "$embed_pc"
+    tmp_embed_pc=$nx_build_dir/python-embed.pc.tmp
+    sed "s|^Libs.private:.*|Libs.private: $embed_private_libs|" "$embed_pc" > "$tmp_embed_pc"
+    run_install cp "$tmp_embed_pc" "$embed_pc"
+    rm -f "$tmp_embed_pc"
 fi
 
 run_install rm -rf "$runtime_root/lib"
