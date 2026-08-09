@@ -5377,7 +5377,13 @@ fi
 # header definition prevents usage - autoconf doesn't use the headers), or
 # raise an error if used at runtime. Force these symbols off.
 if test "$ac_sys_system" != "iOS" ; then
-  AC_CHECK_FUNCS([dup3 getentropy getgroups pipe2 system])
+  AC_CHECK_FUNCS([getentropy getgroups system])
+fi
+# In addition, macOS introduced dup3 and pipe2 in macOS 27, late in the
+# lifetime of this version of Python. Rather than adding weaklinking
+# support for them, just continue to ignore them.
+if test "$ac_sys_system" != "iOS" -a "$ac_sys_system" != "Darwin"; then
+  AC_CHECK_FUNCS([dup3 pipe2])
 fi
 
 AC_CHECK_DECL([dirfd],
@@ -6464,18 +6470,21 @@ LDVERSION='$(VERSION)$(ABIFLAGS)'
 AC_MSG_RESULT([$LDVERSION])
 
 # Configure the flags and dependencies used when compiling shared modules.
-# Do not rename LIBPYTHON - it's accessed via sysconfig by package build
-# systems (e.g. Meson) to decide whether to link extension modules against
-# libpython.
 AC_SUBST([MODULE_DEPS_SHARED])
 AC_SUBST([LIBPYTHON])
 MODULE_DEPS_SHARED='$(MODULE_DEPS_STATIC) $(EXPORTSYMS)'
+
+# On most platforms, extension modules aren't linked against libpython, so
+# LIBPYTHON must be empty.
 LIBPYTHON=''
 
 # On Android and Cygwin the shared libraries must be linked with libpython.
+# LIBPYTHON is used by python-config, python3.pc, the commands for building the
+# stdlib's own extension modules, and external package build systems via
+# sysconfig, so its value must be suitable for all those contexts.
 if test "$PY_ENABLE_SHARED" = "1" && ( test -n "$ANDROID_API_LEVEL" || test "$MACHDEP" = "cygwin"); then
   MODULE_DEPS_SHARED="$MODULE_DEPS_SHARED \$(LDLIBRARY)"
-  LIBPYTHON="\$(BLDLIBRARY)"
+  LIBPYTHON="-lpython${VERSION}${ABIFLAGS}"
 fi
 
 # On iOS the shared libraries must be linked with the Python framework

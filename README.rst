@@ -2,6 +2,7 @@ Python for Nintendo Switch homebrew
 ===================================
 
 This repository is a fork of CPython 3.14 for Nintendo Switch homebrew.
+It is currently based on Python version 3.14.7+.
 It exists to make Python practical as an embedded runtime in ``.nro``
 applications built with devkitPro, devkitA64, and libnx.
 
